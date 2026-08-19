@@ -1,6 +1,6 @@
 {
     "name": "flytachi/winter-redis",
-    "description": "",
+    "description": "Pooled Redis for long-running PHP — coroutine-safe connections, typed stores and an optional PSR-16 adapter.",
     "type": "library",
     "license": "MIT",
     "scripts": {
@@ -20,19 +20,34 @@
         }
     },
     "require": {
-        "php": ">=8.4"
+        "php": ">=8.4",
+        "ext-redis": "*",
+        "flytachi/winter-cpool": "^1.0",
+        "psr/log": "^3.0"
     },
     "require-dev": {
         "phpunit/phpunit": "@stable",
-        "squizlabs/php_codesniffer": "@stable"
+        "squizlabs/php_codesniffer": "@stable",
+        "swoole/ide-helper": "^6.0"
+    },
+    "suggest": {
+        "ext-swoole": "Enables real connection pooling; without it a single self-maintaining connection is used."
     },
     "homepage": "https://winterframe.net",
     "support": {
         "issues": "https://github.com/flytachi/winter-redis/issues",
         "source": "https://github.com/flytachi/winter-redis",
-        "docs": "https://winterframe.net/docs/redis"
+        "docs": "https://winterframe.net/packages/redis"
     },
-    "keywords": [],
+    "keywords": [
+        "php",
+        "redis",
+        "cache",
+        "pool",
+        "coroutine",
+        "swoole",
+        "winter"
+    ],
     "authors": [
         {
             "name": "Flytachi",

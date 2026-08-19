@@ -1,0 +1,42 @@
+{
+    "name": "flytachi/winter-redis",
+    "description": "",
+    "type": "library",
+    "license": "MIT",
+    "scripts": {
+        "test": "phpunit",
+        "test-detail": "phpunit --testdox",
+        "cs-check": "phpcs .",
+        "cs-fix": "phpcbf ."
+    },
+    "autoload": {
+        "psr-4": {
+            "Flytachi\\Winter\\Redis\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Flytachi\\Winter\\Redis\\Tests\\": "tests/"
+        }
+    },
+    "require": {
+        "php": ">=8.4"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "@stable",
+        "squizlabs/php_codesniffer": "@stable"
+    },
+    "homepage": "https://winterframe.net",
+    "support": {
+        "issues": "https://github.com/flytachi/winter-redis/issues",
+        "source": "https://github.com/flytachi/winter-redis",
+        "docs": "https://winterframe.net/packages/redis"
+    },
+    "keywords": [],
+    "authors": [
+        {
+            "name": "Flytachi",
+            "email": "jason.khan.x@gmail.com"
+        }
+    ]
+}

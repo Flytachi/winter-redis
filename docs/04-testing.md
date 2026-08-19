@@ -21,10 +21,17 @@ against a mock:
 ```bash
 XDEBUG_MODE=off composer test                        # 127.0.0.1:6379, database 0
 XDEBUG_MODE=off REDIS_TEST_PORT=6399 composer test   # elsewhere
+XDEBUG_MODE=off composer test-ci                     # skips fail the run
 ```
 
 `REDIS_TEST_HOST`, `REDIS_TEST_PORT`, `REDIS_TEST_DB`. `RedisTestCase` skips the whole
 class when nothing answers, so a machine without Redis reports skips rather than failures.
+
+That is the right trade on a laptop and the wrong one in a pipeline: with no server
+reachable the suite runs 7 tests out of 124, makes 13 assertions and still prints `OK`.
+`test-ci` adds `--fail-on-skipped` so that run exits **1** instead. The printed summary is
+identical either way — the exit code is the whole difference, so a pipeline must check it
+rather than grep the output.
 
 **`XDEBUG_MODE=off` is not optional** when coroutine tests run. Xdebug's function
 observers do not survive coroutine stacks: the report says `OK` and the process then exits

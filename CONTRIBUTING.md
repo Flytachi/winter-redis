@@ -21,6 +21,7 @@ cannot run at all without the extension, and they cover the part most likely to 
 
 ```bash
 XDEBUG_MODE=off composer test        # phpunit
+XDEBUG_MODE=off composer test-ci     # the same, but skips fail the run
 composer test-detail                 # phpunit --testdox
 composer cs-check                    # phpcs, PSR-12
 composer cs-fix                      # phpcbf
@@ -28,7 +29,20 @@ composer validate --no-check-publish
 ```
 
 Point the suite at another server with `REDIS_TEST_HOST`, `REDIS_TEST_PORT`,
-`REDIS_TEST_DB`. With no Redis answering, the suite skips instead of failing.
+`REDIS_TEST_DB`. With no Redis answering, the suite skips instead of failing — which is
+right for a laptop and wrong for CI, where a run that tested nothing would report success.
+
+`test-ci` is the same suite with `--fail-on-skipped`, and it is what a pipeline should
+call. Watch the exit code rather than the summary: with everything skipped the text still
+reads `OK, but some tests were skipped!` while the process exits **1**.
+
+```
+no server, composer test      → 124 tests, 13 assertions, 117 skipped, exit 0
+no server, composer test-ci   → the same output,                        exit 1
+with a server                 → 124 tests, 385 assertions,              exit 0
+```
+
+The seven that run without a server are the two classes that start one themselves.
 
 ### `XDEBUG_MODE=off` is not optional
 

@@ -19,7 +19,7 @@ use Redis;
  * released. That is the wrong shape for an application serving requests: there, declare
  * a {@see \Flytachi\Winter\Redis\Config\RedisConfig} and let the pool own the sockets.
  *
- * @link https://winterframe.net/packages/redis/configuration Configuration
+ * @link https://winterframe.net/docs/redis-configuration Configuration: a one-off connection
  */
 final class RedisCall extends BaseRedisConfig
 {
@@ -27,6 +27,7 @@ final class RedisCall extends BaseRedisConfig
         string $host = 'localhost',
         int $port = 6379,
         string $password = '',
+        string $username = '',
         int $databaseIndex = 0,
         float $timeout = 1.5,
         float $readTimeout = 2.0,
@@ -35,6 +36,7 @@ final class RedisCall extends BaseRedisConfig
         $this->host          = $host;
         $this->port          = $port;
         $this->password      = $password;
+        $this->username      = $username;
         $this->databaseIndex = $databaseIndex;
         $this->timeout       = $timeout;
         $this->readTimeout   = $readTimeout;

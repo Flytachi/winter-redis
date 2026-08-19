@@ -80,6 +80,32 @@ final class ConfigTest extends RedisTestCase
         self::assertStringNotContainsString('s3cret', $config->getDsn());
     }
 
+    public function testAnAclUserAuthenticatesAsThatUser(): void
+    {
+        $admin = $this->call()->connection();
+        $admin->rawCommand('ACL', 'SETUSER', 'winter-test', 'on', '>s3cret', '~*', '+@all');
+
+        try {
+            $config = new RedisCall(
+                host: self::host(),
+                port: self::port(),
+                password: 's3cret',
+                username: 'winter-test',
+            );
+
+            self::assertSame('winter-test', $config->connection()->rawCommand('ACL', 'WHOAMI'));
+            self::assertSame('winter-test', $config->getUsername());
+        } finally {
+            $admin->rawCommand('ACL', 'DELUSER', 'winter-test');
+        }
+    }
+
+    public function testWithoutAUsernameTheDefaultUserIsUsed(): void
+    {
+        self::assertSame('default', $this->call()->connection()->rawCommand('ACL', 'WHOAMI'));
+        self::assertSame('', $this->call()->getUsername());
+    }
+
     public function testSerializerIsAppliedToTheConnection(): void
     {
         $config = new RedisCall(

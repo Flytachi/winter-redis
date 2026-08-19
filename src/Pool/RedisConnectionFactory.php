@@ -18,7 +18,7 @@ use Psr\Log\LoggerInterface;
  * `PING`. Each {@see create()} builds a fresh config, so every pool slot gets an
  * independent socket with its own authentication and database selection.
  *
- * @link https://winterframe.net/packages/redis/pooling Pooling
+ * @link https://winterframe.net/docs/redis-pooling Connection pool
  */
 final readonly class RedisConnectionFactory implements ConnectionFactory
 {

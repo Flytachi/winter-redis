@@ -22,7 +22,7 @@ namespace Flytachi\Winter\Redis\Pool;
  * }
  * ```
  *
- * @link https://winterframe.net/packages/redis/pooling#sizing-the-pool Sizing the pool
+ * @link https://winterframe.net/docs/redis-pooling Connection pool: sizing
  */
 interface RedisPoolConfigInterface
 {

@@ -18,10 +18,35 @@ use Throwable;
  */
 abstract class BaseRedisConfig implements RedisConfigInterface
 {
+    /**
+     * Server address. A scheme the driver understands may be prepended — `tls://` for a
+     * TLS endpoint, `unix://` for a socket path.
+     */
     protected string $host = 'localhost';
+
     protected int $port = 6379;
+
+    /**
+     * ACL user name (Redis 6+). Empty means the `default` user, which is what a plain
+     * password authenticates as.
+     */
+    protected string $username = '';
+
     protected string $password = '';
+
     protected int $databaseIndex = 0;
+
+    /**
+     * Stream context handed to the driver — where TLS material goes: a CA bundle, a
+     * client certificate, peer verification.
+     *
+     * ```php
+     * $this->context = ['stream' => ['cafile' => '/etc/ssl/redis-ca.pem']];
+     * ```
+     *
+     * @var array<string, mixed>
+     */
+    protected array $context = [];
 
     /** Seconds to wait for the socket to open. */
     protected float $timeout = 1.5;
@@ -49,12 +74,18 @@ abstract class BaseRedisConfig implements RedisConfigInterface
         }
 
         $store = new Redis();
-        $store->connect($this->host, $this->port, $this->timeout);
+        $store->connect(
+            $this->host,
+            $this->port,
+            $this->timeout,
+            context: $this->context === [] ? null : $this->context,
+        );
         $store->setOption(Redis::OPT_READ_TIMEOUT, $this->readTimeout);
         $store->setOption(Redis::OPT_SERIALIZER, $this->serializer);
 
-        if ($this->password !== '') {
-            $store->auth($this->password);
+        if ($this->password !== '' || $this->username !== '') {
+            // A bare password authenticates as `default`; an ACL user needs the pair.
+            $store->auth($this->username === '' ? $this->password : [$this->username, $this->password]);
         }
         if ($this->databaseIndex !== 0) {
             $store->select($this->databaseIndex);
@@ -142,6 +173,12 @@ abstract class BaseRedisConfig implements RedisConfigInterface
     final public function getPort(): int
     {
         return $this->port;
+    }
+
+    /** ACL user name, or an empty string when authenticating as `default`. */
+    final public function getUsername(): string
+    {
+        return $this->username;
     }
 
     final public function getDatabaseIndex(): int

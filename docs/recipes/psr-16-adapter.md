@@ -78,7 +78,6 @@ use Redis;
  *   - **The config must serialize.** PSR-16 accepts any serializable value, while a
  *     `SERIALIZER_NONE` connection stores bytes only and would mangle arrays.
  *
- * @link https://winterframe.net/packages/redis/psr-16 PSR-16 adapter
  */
 final class SimpleCache implements CacheInterface
 {

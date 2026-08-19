@@ -39,7 +39,7 @@ use Throwable;
  * that matters is `worker_num × poolMax × instances` against the `maxclients` of the
  * Redis you are talking to.
  *
- * @link https://winterframe.net/packages/redis/pooling Pooling
+ * @link https://winterframe.net/docs/redis-pooling Connection pool
  */
 final class RedisPool
 {
@@ -119,6 +119,31 @@ final class RedisPool
         return self::inCoroutine()
             ? self::coroutineStore($configClass)
             : self::staticStore($configClass);
+    }
+
+    /**
+     * A connection that belongs to the caller alone — outside the pool, never shared,
+     * never returned.
+     *
+     * It exists for commands that occupy a connection for as long as they last:
+     * `BLPOP`, `SUBSCRIBE`, `MONITOR`. Taking one of those on a pooled connection means
+     * a pool slot is held for the whole wait, and a handful of consumers can empty the
+     * pool while Redis itself sits idle — the failure then reads as "Redis is slow".
+     *
+     * The caller owns it: keep it for the length of the loop and `disconnect()` it when
+     * done. Dropping the last reference closes it too.
+     *
+     * @param class-string<RedisConfigInterface> $configClass
+     */
+    public static function dedicated(string $configClass): RedisConfigInterface
+    {
+        /** @var RedisConfigInterface $config */
+        $config = new $configClass();
+        $config->setUp();
+        $config->connect();
+        self::logger()->debug("dedicated connection opened: {$configClass}");
+
+        return $config;
     }
 
     /**

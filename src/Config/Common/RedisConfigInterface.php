@@ -48,6 +48,9 @@ interface RedisConfigInterface
 
     public function getPort(): int;
 
+    /** ACL user name, or an empty string when authenticating as `default`. */
+    public function getUsername(): string;
+
     public function getDatabaseIndex(): int;
 
     /** One of the `Redis::SERIALIZER_*` constants — how values are encoded on the wire. */

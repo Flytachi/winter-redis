@@ -26,7 +26,7 @@ use Flytachi\Winter\Redis\Config\Common\EntityCallRedisTrait;
  * config class with its own `$databaseIndex` — never switch databases at runtime, or
  * the choice leaks to whoever borrows the connection next.
  *
- * @link https://winterframe.net/packages/redis/configuration Configuration
+ * @link https://winterframe.net/docs/redis-configuration Configuration
  */
 abstract class RedisConfig extends BaseRedisConfig
 {

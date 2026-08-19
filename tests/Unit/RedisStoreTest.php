@@ -101,6 +101,62 @@ final class RedisStoreTest extends RedisTestCase
         self::assertSame(3000, (int) $noise->dbSize(), 'and nothing else was touched');
     }
 
+    public function testKeysListsOnlyThisStoreAndStripsThePrefix(): void
+    {
+        $queue = new QueueStore();
+        $this->store->set('alpha', '1');
+        $this->store->set('beta', '2');
+        $queue->set('gamma', '3');
+        RedisPool::store(TestRedisConfig::class)->set('unrelated', '4');
+
+        $keys = $this->store->keys();
+        sort($keys);
+
+        self::assertSame(['alpha', 'beta'], $keys, 'names come back usable, without the prefix');
+        self::assertSame(['gamma'], $queue->keys());
+    }
+
+    public function testKeysAcceptsAPatternInsideTheStore(): void
+    {
+        $this->store->set('user:1', 'x');
+        $this->store->set('user:2', 'x');
+        $this->store->set('order:1', 'x');
+
+        $keys = $this->store->keys('user:*');
+        sort($keys);
+
+        self::assertSame(['user:1', 'user:2'], $keys);
+    }
+
+    public function testKeysWalksTheWholeKeyspaceNotJustTheFirstScanSlice(): void
+    {
+        $noise = RedisPool::store(TestRedisConfig::class);
+        foreach (range(1, 3000) as $n) {
+            $noise->set("noise:{$n}", 'x');
+        }
+        foreach (range(1, 40) as $n) {
+            $this->store->set("k{$n}", 'x');
+        }
+
+        self::assertCount(40, $this->store->keys(), 'an empty SCAN slice must not end the walk');
+    }
+
+    public function testKeysIsEmptyForAnEmptyStore(): void
+    {
+        self::assertSame([], $this->store->keys());
+    }
+
+    public function testKeysOnAnUnprefixedStoreSeesTheWholeDatabase(): void
+    {
+        RedisPool::store(TestRedisConfig::class)->set('bare', 'x');
+        $this->store->set('mine', 'x');
+
+        $keys = (new UnprefixedStore())->keys();
+        sort($keys);
+
+        self::assertSame(['bare', 'session:mine'], $keys, 'no prefix, no scoping — by definition');
+    }
+
     public function testFlushIsRefusedWithoutAPrefix(): void
     {
         $store = new UnprefixedStore();

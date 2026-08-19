@@ -30,7 +30,7 @@
     "support": {
         "issues": "https://github.com/flytachi/winter-redis/issues",
         "source": "https://github.com/flytachi/winter-redis",
-        "docs": "https://winterframe.net/packages/redis"
+        "docs": "https://winterframe.net/docs/redis"
     },
     "keywords": [],
     "authors": [

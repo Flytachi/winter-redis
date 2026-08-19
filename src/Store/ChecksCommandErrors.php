@@ -35,6 +35,17 @@ trait ChecksCommandErrors
         throw new RedisCommandException($error);
     }
 
+    /**
+     * Raises a refusal the caller has already read out of `getLastError()` — for the
+     * cases where one particular error is expected and the rest are not.
+     *
+     * @throws RedisCommandException
+     */
+    private function failCommand(string $error): never
+    {
+        throw new RedisCommandException($error);
+    }
+
     /** Runs a command with the error slate clean, so the check that follows is about it alone. */
     private function runChecked(Redis $redis, callable $command): mixed
     {

@@ -114,6 +114,24 @@ abstract class RedisStore
     }
 
     /**
+     * A handle on the stream stored under this key.
+     *
+     * ```php
+     * $store->stream('events')->add(['type' => 'signup']);
+     * ```
+     *
+     * Like the other handles this one talks to no server until a method is called, and
+     * the prefix is applied here, once. Keep it for a loop that tails the stream: its
+     * blocking reads reuse a single connection of their own.
+     *
+     * @link https://winterframe.net/docs/redis-streams Streams
+     */
+    final public function stream(string $key): RedisStream
+    {
+        return new RedisStream($this, $this->key($key));
+    }
+
+    /**
      * A handle on the list stored under this key.
      *
      * ```php

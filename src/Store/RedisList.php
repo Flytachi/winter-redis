@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Redis\Store;
 
-use Flytachi\Winter\Redis\Config\Common\RedisConfigInterface;
-use Flytachi\Winter\Redis\RedisPool;
 use LogicException;
 use Redis;
 
@@ -32,8 +30,8 @@ use Redis;
  */
 final class RedisList
 {
-    /** Owned by this handle alone, opened on the first blocking read. */
-    private ?RedisConfigInterface $dedicated = null;
+    use ChecksCommandErrors;
+    use UsesDedicatedConnection;
 
     /**
      * @param RedisStore $store Owner — supplies the connection and the prefix.
@@ -89,7 +87,9 @@ final class RedisList
     public function push(mixed $value, ?int $cap = null): int
     {
         if ($cap === null) {
-            return (int) $this->store->raw()->rPush($this->name, $value);
+            $redis = $this->store->raw();
+
+            return (int) $this->runChecked($redis, fn(Redis $r): mixed => $r->rPush($this->name, $value));
         }
 
         $length = $this->capped(fn(Redis $redis): mixed => $redis->rPush($this->name, $value), -$cap, -1);
@@ -108,7 +108,9 @@ final class RedisList
     public function pushFront(mixed $value, ?int $cap = null): int
     {
         if ($cap === null) {
-            return (int) $this->store->raw()->lPush($this->name, $value);
+            $redis = $this->store->raw();
+
+            return (int) $this->runChecked($redis, fn(Redis $r): mixed => $r->lPush($this->name, $value));
         }
 
         $length = $this->capped(fn(Redis $redis): mixed => $redis->lPush($this->name, $value), 0, $cap - 1);
@@ -123,7 +125,8 @@ final class RedisList
      */
     public function pop(): mixed
     {
-        $value = $this->store->raw()->lPop($this->name);
+        $redis = $this->store->raw();
+        $value = $this->runChecked($redis, fn(Redis $r): mixed => $r->lPop($this->name));
 
         return $value === false ? null : $value;
     }
@@ -135,7 +138,8 @@ final class RedisList
      */
     public function popBack(): mixed
     {
-        $value = $this->store->raw()->rPop($this->name);
+        $redis = $this->store->raw();
+        $value = $this->runChecked($redis, fn(Redis $r): mixed => $r->rPop($this->name));
 
         return $value === false ? null : $value;
     }
@@ -175,7 +179,11 @@ final class RedisList
             ));
         }
 
-        $value = $this->store->raw()->lMove($this->name, $target->name(), Redis::LEFT, Redis::RIGHT);
+        $redis = $this->store->raw();
+        $value = $this->runChecked(
+            $redis,
+            fn(Redis $r): mixed => $r->lMove($this->name, $target->name(), Redis::LEFT, Redis::RIGHT),
+        );
 
         return $value === false ? null : $value;
     }
@@ -212,23 +220,9 @@ final class RedisList
      */
     public function consume(float $timeout = 0.0): mixed
     {
-        $redis = $this->dedicatedConnection();
-        $redis->setOption(Redis::OPT_READ_TIMEOUT, $timeout > 0 ? $timeout + 1.0 : -1);
-
-        $reply = $redis->blPop([$this->name], $timeout);
+        $reply = $this->dedicatedConnection($timeout)->blPop([$this->name], $timeout);
 
         return is_array($reply) && isset($reply[1]) ? $reply[1] : null;
-    }
-
-    /**
-     * Closes the connection {@see consume()} opened, if there is one.
-     *
-     * @link https://winterframe.net/docs/redis-lists#close Releasing the dedicated connection
-     */
-    public function close(): void
-    {
-        $this->dedicated?->disconnect();
-        $this->dedicated = null;
     }
 
     /**
@@ -362,12 +356,5 @@ final class RedisList
 
             return is_array($replies) ? (int) ($replies[0] ?? 0) : 0;
         });
-    }
-
-    private function dedicatedConnection(): Redis
-    {
-        $this->dedicated ??= RedisPool::dedicated($this->configClass());
-
-        return $this->dedicated->connection();
     }
 }

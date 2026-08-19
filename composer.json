@@ -38,7 +38,7 @@
     "support": {
         "issues": "https://github.com/flytachi/winter-redis/issues",
         "source": "https://github.com/flytachi/winter-redis",
-        "docs": "https://winterframe.net/packages/redis"
+        "docs": "https://winterframe.net/docs/redis"
     },
     "keywords": [
         "php",
@@ -54,12 +54,5 @@
             "name": "Flytachi",
             "email": "jason.khan.x@gmail.com"
         }
-    ],
-    "scripts-descriptions": {
-        "test": "Run the test suite; classes that need a live Redis are skipped when none answers.",
-        "test-ci": "Same, but a skipped test fails the run — a suite that tested nothing must not report success.",
-        "test-detail": "Run the test suite with testdox output.",
-        "cs-check": "Check coding standards (PSR-12).",
-        "cs-fix": "Fix coding standards automatically."
-    }
+    ]
 }

@@ -219,6 +219,10 @@ composer cs-fix                 # phpcbf
 `XDEBUG_MODE=off` matters: Xdebug's function observers do not survive coroutine stacks, so
 a green run can still exit 139.
 
+- Setup, the testing philosophy and the documentation rules: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Changes and upgrade notes: [CHANGELOG.md](CHANGELOG.md)
+- Reporting a vulnerability, and what the package does and does not guarantee: [SECURITY.md](SECURITY.md)
+
 ---
 
 ## License

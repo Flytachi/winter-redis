@@ -38,8 +38,19 @@ final readonly class RedisHash
 {
     use ChecksCommandErrors;
 
-    /** Field-level lifetimes arrived in this release of Redis. */
-    private const string FIELD_TTL_SINCE = '8.0';
+    /**
+     * The release of Redis each per-field lifetime command arrived in.
+     *
+     * Reading and clearing a field's lifetime landed in 7.4; writing a field together
+     * with its lifetime in one command needed `HSETEX`, which is 8.0. Quoting a single
+     * version for all three would send a 7.4 user off to upgrade for something their
+     * server already has.
+     */
+    private const array FIELD_TTL_SINCE = [
+        'HTTL'     => '7.4',
+        'HPERSIST' => '7.4',
+        'HSETEX'   => '8.0',
+    ];
 
     /**
      * @param RedisStore $store Owner — supplies the connection and the prefix.
@@ -381,7 +392,7 @@ final readonly class RedisHash
             'Redis %s (per-field lifetimes) needs server %s or newer; this server reports %s. '
             . 'Give the whole hash a lifetime with expireKey() instead.',
             $command,
-            self::FIELD_TTL_SINCE,
+            self::FIELD_TTL_SINCE[$command] ?? '8.0',
             $this->serverVersion() ?? 'an older version',
         ), previous: $previous);
     }

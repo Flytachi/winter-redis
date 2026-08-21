@@ -68,7 +68,7 @@ $sessions = new SessionStore();
 $sessions->set('42', $token, ttl: 3600);
 $sessions->get('42');                       // $token | null
 $sessions->increment('logins');             // atomic
-$sessions->keys();                          // ['42', 'logins']
+$sessions->keys();                          // ['logins', '42'] — SCAN order, not insertion
 $sessions->flush();                         // this store only, never the database
 ```
 
@@ -150,6 +150,10 @@ ForkReset::register(static fn() => RedisPool::reset());
 descriptors, and closing would tear down the parent's socket. `shutdown()` is the opposite
 and belongs at worker exit; it is only required if background housekeeping is enabled,
 because a live timer keeps the reactor from draining.
+
+Under the [Winter kernel](https://github.com/flytachi/winter-kernel) both lines are already
+there: `Kernel::init()` registers them when it sees the package, and `shutdown()` runs on
+`workerExit`. The snippet above is for using this package on its own.
 
 ---
 

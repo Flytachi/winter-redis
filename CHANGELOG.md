@@ -28,7 +28,8 @@ worker.
 and `flush()` scan rather than block, and `flush()` refuses outright without a prefix.
 
 **Hashes** — `RedisHash`: fields, bulk reads and writes, counters, and per-field lifetimes
-through `HSETEX` on Redis 8.0+ with an explanatory refusal on older servers.
+— `HTTL` and `HPERSIST` on Redis 7.4+, `HSETEX` on 8.0+ — with a refusal on older servers
+that names the command, the version it needs and the one that is running.
 
 **Lists** — `RedisList`: queues and stacks, `push(cap:)` as one atomic `MULTI(RPUSH,
 LTRIM)`, `consume()` blocking on a dedicated connection, and `moveTo()` for a queue that

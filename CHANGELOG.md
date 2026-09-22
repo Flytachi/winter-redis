@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.0.3] — 2026-09-22
+
+### Changed
+
+**Pool housekeeping is on by default.** `RedisPoolTrait` now answers `keepaliveTime` with
+`120.0` (was `0.0`) and `idleTimeout` with `600.0` (was `0.0`); `minimumIdle` stays `0`, and
+`poolMaxConnections` / `poolWaitTimeout` are untouched. A config that declares the property
+itself is unaffected — the trait only supplies what was not set.
+
+Redis makes this sharper than the database case: the default pool is ten connections per
+worker, so a pool that sat idle while the server (or a firewall) dropped its sockets left ten
+corpses for the next request to find, and before the matching `winter-cpool` fix that cost
+the first two requests outright. Redis's own `timeout` directive closes idle clients on many
+managed offerings, which is exactly what a two-minute ping prevents; the ten-minute
+`idleTimeout` then hands the connections back rather than holding `worker_num × 10` of them
+overnight.
+
+The numbers are HikariCP's and keep its ordering, `keepaliveTime < idleTimeout < maxLifetime`.
+
+### Added
+
+- `RedisPoolTraitTest` — the trait's defaults and property overrides had no coverage.
+
 ## [1.0.0] — Unreleased
 
 First release. Pooled Redis for long-running PHP, built on
@@ -54,4 +79,5 @@ ecosystem asks for it, adding it later is a minor release while removing it woul
 major one. The code is kept as a recipe in
 [`docs/recipes/psr-16-adapter.md`](docs/recipes/psr-16-adapter.md).
 
+[1.0.3]: https://github.com/flytachi/winter-redis/releases/tag/v1.0.3
 [1.0.0]: https://github.com/flytachi/winter-redis/releases/tag/v1.0.0

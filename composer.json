@@ -23,7 +23,7 @@
     "require": {
         "php": ">=8.4",
         "ext-redis": "*",
-        "flytachi/winter-cpool": "^1.0",
+        "flytachi/winter-cpool": "^1.1",
         "psr/log": "^3.0"
     },
     "require-dev": {

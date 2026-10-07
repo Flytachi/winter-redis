@@ -201,7 +201,7 @@ final class RedisStreamGroupTest extends RedisTestCase
     {
         $held = null;
 
-        Coroutine\run(function () use (&$held): void {
+        self::runCoroutines(function () use (&$held): void {
             $store  = new SessionStore();
             $events = $store->stream('events');
             $events->ensureGroup('workers');

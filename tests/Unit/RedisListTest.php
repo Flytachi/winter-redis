@@ -209,7 +209,7 @@ final class RedisListTest extends RedisTestCase
     {
         $held = null;
 
-        Coroutine\run(function () use (&$held): void {
+        self::runCoroutines(function () use (&$held): void {
             $jobs = (new SessionStore())->list('jobs');
             $jobs->push('warm');                       // this one does use the pool
             $before = RedisPool::stats()[TestRedisConfig::class]['total'];
@@ -227,7 +227,7 @@ final class RedisListTest extends RedisTestCase
     {
         $served = 0;
 
-        Coroutine\run(function () use (&$served): void {
+        self::runCoroutines(function () use (&$served): void {
             // Two consumers wait on an empty list for longer than the pool's own wait
             // timeout, on a pool that holds a single connection.
             foreach (range(1, 2) as $n) {

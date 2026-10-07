@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Flytachi\Winter\Redis\Tests\Unit;
 
+use Flytachi\Winter\Redis\Config\Call\RedisCall;
 use Flytachi\Winter\Redis\RedisPool;
 use Flytachi\Winter\Redis\Store\RedisStore;
 use LogicException;
@@ -189,6 +190,50 @@ final class RedisStoreTest extends RedisTestCase
 
         self::assertSame([1, 1], $result);
         self::assertSame('1', $store->get('a'));
+    }
+
+    public function testTransactionDiscardsAnOpenMultiWhenTheCallbackThrows(): void
+    {
+        $store = $this->store;
+        $failure = new \RuntimeException('business error mid-transaction');
+
+        try {
+            $store->transaction(function (Redis $redis) use ($store, $failure): void {
+                $redis->multi();
+                $redis->incr($store->key('a'));
+                throw $failure;
+            });
+            self::fail('the callback\'s exception must propagate');
+        } catch (\RuntimeException $e) {
+            self::assertSame($failure, $e, 'rethrown as is, not wrapped');
+        }
+
+        self::assertSame(Redis::ATOMIC, $store->raw()->getMode());
+        $store->raw()->exec();      // must not publish the abandoned write
+        self::assertNull($store->get('a'));
+    }
+
+    public function testTransactionClearsAWatchWhenTheCallbackThrows(): void
+    {
+        $store = $this->store;
+
+        try {
+            $store->transaction(function (Redis $redis) use ($store): void {
+                $redis->watch($store->key('w'));
+                throw new \RuntimeException('validation failed after watch');
+            });
+        } catch (\RuntimeException) {
+        }
+
+        // Someone else touches the watched key; a stale WATCH would now abort the next EXEC.
+        (new RedisCall(host: self::host(), port: self::port(), databaseIndex: self::db()))
+            ->connection()
+            ->set($store->key('w'), 'changed');
+
+        $redis = $store->raw();
+        $redis->multi();
+        $redis->set($store->key('next'), 'x');
+        self::assertSame([true], $redis->exec(), 'the next EXEC is not aborted by a WATCH it never set');
     }
 
     public function testStoringAnythingButAStringNeedsASerializingConfig(): void

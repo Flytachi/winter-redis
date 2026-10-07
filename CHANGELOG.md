@@ -6,6 +6,46 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.4] — 2026-10-07
+
+### Fixed
+
+**An abandoned `MULTI` no longer leaks into the next request.** A request that called
+`multi()` and never reached `exec()`/`discard()` — an exception, an early return, a request
+timeout — returned its connection to the pool still in `MULTI`. The next borrower's reads came
+back as queued `Redis` objects instead of values, its writes never reached the server, and the
+next `exec()` on that connection **published the writes the failed request meant to abandon**.
+Reproduced against the real pool and a live Redis before the fix. The same held for an
+unfinished `pipeline()` and for a `select()` on a pooled connection (the next borrower wrote
+into the other database).
+
+`RedisConnectionFactory` now implements `ResettableConnectionFactory`: on return it discards
+an open `MULTI`/`pipeline()` and selects the config's database back, logging **ERROR** with the
+config and the coroutine; a connection that cannot be reset is retired. Discard, not exec —
+executing would publish unfinished work. The check costs no round trip: mode and database are
+phpredis's client-side state.
+
+**`RedisStore::transaction()` cleans up when its callback throws.** Before the exception
+propagates, an open `MULTI`/`pipeline()` is discarded (which also drops its `WATCH`), otherwise
+a `WATCH` is cleared with `UNWATCH`. A stale `WATCH` aborted the next borrower's `EXEC` — it got
+`false` for a transaction that never watched anything. The cleanup costs one round trip on the
+failure path only; a block that completes pays nothing. This is where `WATCH` is covered: the
+client keeps no trace of it, so clearing it at return time would mean an `UNWATCH` round trip
+on every release. A `watch()` on `raw()` outside `transaction()` remains the caller's to close.
+
+Not covered: the non-coroutine `SingleConnection` path.
+
+### Tests
+
+The coroutine tests (`RedisPoolCoroutineTest`, `RedisListTest`, `RedisStreamGroupTest`) hung
+forever against a live Redis since `winter-cpool` 1.1.0 turned pool housekeeping on by default:
+its repeating timer kept `Coroutine\run()` from returning, and nothing shut the pools down
+inside it. They now run through `RedisTestCase::runCoroutines()`, which waits for the
+coroutines the test started and then shuts the pools down, as `workerExit` does for a worker.
+The whole suite runs again: 133 tests, about 4 s.
+
+Requires `flytachi/winter-cpool` `^1.2` (the constraint is raised accordingly).
+
 ## [1.0.3] — 2026-09-22
 
 ### Changed
@@ -29,7 +69,7 @@ The numbers are HikariCP's and keep its ordering, `keepaliveTime < idleTimeout <
 
 - `RedisPoolTraitTest` — the trait's defaults and property overrides had no coverage.
 
-## [1.0.0] — Unreleased
+## [1.0.0] — 2026-08-19
 
 First release. Pooled Redis for long-running PHP, built on
 [flytachi/winter-cpool](https://github.com/flytachi/winter-cpool).
@@ -79,5 +119,7 @@ ecosystem asks for it, adding it later is a minor release while removing it woul
 major one. The code is kept as a recipe in
 [`docs/recipes/psr-16-adapter.md`](docs/recipes/psr-16-adapter.md).
 
+[Unreleased]: https://github.com/flytachi/winter-redis/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/flytachi/winter-redis/releases/tag/v1.0.4
 [1.0.3]: https://github.com/flytachi/winter-redis/releases/tag/v1.0.3
 [1.0.0]: https://github.com/flytachi/winter-redis/releases/tag/v1.0.0

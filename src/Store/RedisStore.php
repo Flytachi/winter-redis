@@ -321,6 +321,13 @@ abstract class RedisStore
      * Keys are **not** prefixed for you here — the callback gets the raw client, so use
      * {@see key()} as above.
      *
+     * When the callback throws, the block cleans up before the exception propagates: an
+     * open `MULTI`/`pipeline()` is discarded (which also drops its `WATCH`), otherwise a
+     * `WATCH` the callback may have set is cleared. Left behind, either would travel with
+     * the connection — a stale `MULTI` makes the next `exec()` publish the abandoned
+     * writes, a stale `WATCH` aborts an `EXEC` that never asked for it. The cleanup costs
+     * one round trip on the failure path only; a block that completes pays nothing.
+     *
      * @template T
      * @param callable(Redis): T $callback
      * @return T
@@ -329,7 +336,22 @@ abstract class RedisStore
      */
     final public function transaction(callable $callback): mixed
     {
-        return $callback($this->raw());
+        $redis = $this->raw();
+        try {
+            return $callback($redis);
+        } catch (\Throwable $e) {
+            try {
+                if ($redis->getMode() !== Redis::ATOMIC) {
+                    $redis->discard();
+                } else {
+                    $redis->unwatch();
+                }
+            } catch (\Throwable) {
+                // The connection itself is failing — the original error is the one that
+                // matters, and the pool's return-time reset retires what cannot be cleaned.
+            }
+            throw $e;
+        }
     }
 
     /**

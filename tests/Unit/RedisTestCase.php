@@ -54,6 +54,30 @@ abstract class RedisTestCase extends TestCase
         return (int) (getenv('REDIS_TEST_DB') ?: 0);
     }
 
+    /**
+     * `Coroutine\run()` that returns.
+     *
+     * A pool's housekeeper is a repeating `Timer::tick`, and a live timer keeps the
+     * scheduler from ever finishing — the test would hang rather than fail. The pools
+     * cannot simply be shut down at the end of `$body` either: a body that spawns
+     * coroutines returns before they do, and they would lose their pool mid-use. So
+     * this waits for every coroutine the body started, then shuts the pools down — what
+     * `workerExit` does for a real worker.
+     */
+    protected static function runCoroutines(callable $body): void
+    {
+        \Swoole\Coroutine\run(static function () use ($body): void {
+            try {
+                $body();
+            } finally {
+                while (\Swoole\Coroutine::stats()['coroutine_num'] > 1) {
+                    \Swoole\Coroutine::sleep(0.001);
+                }
+                RedisPool::shutdown();
+            }
+        });
+    }
+
     protected function flushTestDatabase(): void
     {
         (new RedisCall(host: self::host(), port: self::port(), databaseIndex: self::db()))

@@ -25,7 +25,7 @@ final class RedisPoolCoroutineTest extends RedisTestCase
     {
         $ids = [];
 
-        Coroutine\run(function () use (&$ids): void {
+        self::runCoroutines(function () use (&$ids): void {
             foreach (range(1, 3) as $n) {
                 Coroutine::create(function () use (&$ids): void {
                     $redis = RedisPool::store(TestRedisConfig::class);
@@ -44,7 +44,7 @@ final class RedisPoolCoroutineTest extends RedisTestCase
     {
         $ids = [];
 
-        Coroutine\run(function () use (&$ids): void {
+        self::runCoroutines(function () use (&$ids): void {
             $ids[] = spl_object_id(RedisPool::store(TestRedisConfig::class));
             $ids[] = spl_object_id(RedisPool::store(TestRedisConfig::class));
         });
@@ -55,19 +55,21 @@ final class RedisPoolCoroutineTest extends RedisTestCase
     public function testTheConnectionIsReturnedWhenTheCoroutineEnds(): void
     {
         $duringRun = [];
+        $afterRun = [];
 
-        Coroutine\run(function () use (&$duringRun): void {
+        self::runCoroutines(function () use (&$duringRun, &$afterRun): void {
             Coroutine::create(function () use (&$duringRun): void {
                 RedisPool::store(TestRedisConfig::class)->ping();
                 $duringRun = RedisPool::stats()[TestRedisConfig::class];
                 Coroutine::sleep(0.02);
             });
             Coroutine::sleep(0.05);
+            // Read before runCoroutines() shuts the pools down.
+            $afterRun = RedisPool::stats()[TestRedisConfig::class];
         });
 
         self::assertSame(1, $duringRun['active'], 'held while the coroutine is alive');
 
-        $afterRun = RedisPool::stats()[TestRedisConfig::class];
         self::assertSame(0, $afterRun['active'], 'released by defer, with no manual call');
         self::assertSame(1, $afterRun['idle']);
     }
@@ -76,7 +78,7 @@ final class RedisPoolCoroutineTest extends RedisTestCase
     {
         $seen = [];
 
-        Coroutine\run(function () use (&$seen): void {
+        self::runCoroutines(function () use (&$seen): void {
             // Sequential coroutines, so the second is handed the first one's connection.
             Coroutine::create(function (): void {
                 RedisPool::store(TestRedisConfig::class)->set('winter:leak', 'first');
@@ -97,7 +99,7 @@ final class RedisPoolCoroutineTest extends RedisTestCase
     {
         $error = null;
 
-        Coroutine\run(function () use (&$error): void {
+        self::runCoroutines(function () use (&$error): void {
             Coroutine::create(function (): void {
                 RedisPool::store(TinyPoolRedisConfig::class)->ping();
                 Coroutine::sleep(0.5);               // hold the only connection
@@ -121,7 +123,7 @@ final class RedisPoolCoroutineTest extends RedisTestCase
     {
         $served = false;
 
-        Coroutine\run(function () use (&$served): void {
+        self::runCoroutines(function () use (&$served): void {
             Coroutine::create(function (): void {
                 RedisPool::store(TinyPoolRedisConfig::class)->ping();
                 Coroutine::sleep(0.05);              // released well inside the 0.2s wait
@@ -137,12 +139,14 @@ final class RedisPoolCoroutineTest extends RedisTestCase
 
     public function testStatsReportsEachConfigSeparately(): void
     {
-        Coroutine\run(function (): void {
+        $stats = [];
+
+        self::runCoroutines(function () use (&$stats): void {
             RedisPool::store(TestRedisConfig::class)->ping();
             RedisPool::store(TinyPoolRedisConfig::class)->ping();
+            // Read before runCoroutines() shuts the pools down.
+            $stats = RedisPool::stats();
         });
-
-        $stats = RedisPool::stats();
 
         self::assertArrayHasKey(TestRedisConfig::class, $stats);
         self::assertArrayHasKey(TinyPoolRedisConfig::class, $stats);

@@ -322,8 +322,9 @@ abstract class RedisStore
      * {@see key()} as above.
      *
      * When the callback throws, the block cleans up before the exception propagates: an
-     * open `MULTI`/`pipeline()` is discarded (which also drops its `WATCH`), otherwise a
-     * `WATCH` the callback may have set is cleared. Left behind, either would travel with
+     * open `MULTI` is discarded (which also drops its `WATCH`); an open `pipeline()` is
+     * discarded — on the client only, so a `WATCH` sent before it is cleared as well;
+     * otherwise a `WATCH` the callback may have set is cleared. Left behind, either would travel with
      * the connection — a stale `MULTI` makes the next `exec()` publish the abandoned
      * writes, a stale `WATCH` aborts an `EXEC` that never asked for it. The cleanup costs
      * one round trip on the failure path only; a block that completes pays nothing.
@@ -341,9 +342,13 @@ abstract class RedisStore
             return $callback($redis);
         } catch (\Throwable $e) {
             try {
-                if ($redis->getMode() !== Redis::ATOMIC) {
+                $mode = $redis->getMode();
+                if ($mode !== Redis::ATOMIC) {
                     $redis->discard();
-                } else {
+                }
+                // DISCARD of a MULTI drops its WATCH on the server; a pipeline's discard
+                // never reaches the server, so whatever it watched before is cleared here.
+                if ($mode !== Redis::MULTI) {
                     $redis->unwatch();
                 }
             } catch (\Throwable) {

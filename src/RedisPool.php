@@ -259,13 +259,48 @@ final class RedisPool
     }
 
     /**
+     * Closes this process's own connections before it forks, so the child inherits
+     * nothing — call it in the **parent**, right before `pcntl_fork()`.
+     *
+     * A fork copies the client together with its socket. A child that goes on to use the
+     * inherited client talks into the parent's session — `CLIENT ID` answers the same
+     * number on both sides — and two processes writing commands into one socket corrupt
+     * the protocol for both. Closing in the parent first leaves the child nothing to
+     * share; both reopen lazily.
+     *
+     * Covers the non-coroutine connections — the only kind a forking process holds: a
+     * Swoole process spawns coroutines, not forks.
+     *
+     * @throws RedisPoolException When a connection is in `MULTI` or `pipeline()` mode.
+     *   Closing it would drop the commands its owner queued, and leaving it open would
+     *   hand the child the same session; neither is acceptable, so the fork is refused.
+     */
+    public static function closeBeforeFork(): void
+    {
+        foreach (self::$static as $connection) {
+            $config = $connection->peek();
+            if ($config instanceof RedisConfigInterface && !self::isAtomic($config)) {
+                throw new RedisPoolException(
+                    'RedisPool: cannot fork while [' . $config::class . '] is in MULTI or pipeline()'
+                    . ' — the child would share its connection. Run exec() or discard() first.'
+                );
+            }
+        }
+        foreach (self::$static as $connection) {
+            $connection->close();
+        }
+    }
+
+    /**
      * Drops every cached connection, pool and config **without closing** them, so the
-     * next {@see store()} opens fresh sockets — the fork-safety reset.
+     * next {@see store()} opens fresh sockets — the fork-safety reset, run in the
+     * **child**.
      *
      * A fork copies file descriptors, so a connection cached before the fork is shared
      * with the parent and would corrupt the wire protocol. The child must forget the
      * inherited sockets without closing them, since closing would tear down the
-     * parent's connection too.
+     * parent's connection too. The parent normally leaves nothing to inherit — it runs
+     * {@see closeBeforeFork()} first.
      *
      * `abandon()` comes first for a reason: a housekeeping `Timer::tick` callback holds
      * a reference to its pool, so a pool that is merely dereferenced would stay alive
@@ -282,6 +317,16 @@ final class RedisPool
     // -------------------------------------------------------------------------
     // Internals
     // -------------------------------------------------------------------------
+
+    /** Whether the client is in plain mode; a client that cannot say counts as plain. */
+    private static function isAtomic(RedisConfigInterface $config): bool
+    {
+        try {
+            return $config->connection()->getMode() === \Redis::ATOMIC;
+        } catch (\Throwable) {
+            return true;
+        }
+    }
 
     private static function forgetAll(): void
     {

@@ -98,8 +98,13 @@ final readonly class RedisConnectionFactory implements ResettableConnectionFacto
             }
 
             $database = $connection->getDatabaseIndex();
-            if ($redis->getDbNum() !== $database) {
-                $left[] = 'SELECT ' . $redis->getDbNum();
+            $current  = $redis->getDbNum();
+            if ($current === false) {
+                // The client cannot say — the socket is gone. Nothing to reset; retire it.
+                return false;
+            }
+            if ($current !== $database) {
+                $left[] = 'SELECT ' . $current;
                 $redis->select($database);
             }
 

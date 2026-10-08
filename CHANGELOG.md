@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-08
+
+### Fixed
+
+**`RedisStore::transaction()` now also clears a `WATCH` set before a `pipeline()`.** On an
+exception the 1.0.4 cleanup discarded an open `MULTI` or `pipeline()` and cleared `WATCH` only
+when neither was open. But a pipeline's `discard()` never reaches the server — it drops the
+client-side buffer — so a `WATCH` sent before `pipeline()` survived on the connection and aborted
+the next borrower's `EXEC`. `UNWATCH` now follows the discard of a pipeline as well.
+
+**A returned connection whose socket is gone is retired instead of logged as `SELECT `.** On a
+broken client `getDbNum()` answers `false`; the return-time reset read that as "the database was
+switched", logged an empty `SELECT`, and tried to select back. It now retires the connection.
+
+### Added
+
+**`RedisPool::closeBeforeFork()` — a forked child no longer talks into the parent's session.**
+A fork copies the client with its socket; a child that went on to use Redis sent its commands
+into the parent's session (`CLIENT ID` answered the same number on both sides), and two
+processes writing into one socket corrupt the protocol for both. `closeBeforeFork()` is called
+in the parent right before `pcntl_fork()` and closes the non-coroutine connections, so the
+child opens its own; both sides reopen lazily. A client in `MULTI` or `pipeline()` makes it
+throw `RedisPoolException` instead of dropping the queued commands. The Winter kernel calls it
+before every fork it makes. (Unlike PDO, phpredis does not end the parent's session when the
+child merely exits — verified — so only a child that uses Redis was affected.)
+
 ## [1.0.4] — 2026-10-07
 
 ### Fixed
@@ -119,7 +145,8 @@ ecosystem asks for it, adding it later is a minor release while removing it woul
 major one. The code is kept as a recipe in
 [`docs/recipes/psr-16-adapter.md`](docs/recipes/psr-16-adapter.md).
 
-[Unreleased]: https://github.com/flytachi/winter-redis/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/flytachi/winter-redis/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/flytachi/winter-redis/releases/tag/v1.1.0
 [1.0.4]: https://github.com/flytachi/winter-redis/releases/tag/v1.0.4
 [1.0.3]: https://github.com/flytachi/winter-redis/releases/tag/v1.0.3
 [1.0.0]: https://github.com/flytachi/winter-redis/releases/tag/v1.0.0

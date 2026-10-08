@@ -213,6 +213,34 @@ final class RedisStoreTest extends RedisTestCase
         self::assertNull($store->get('a'));
     }
 
+    public function testTransactionClearsAWatchSetBeforeAPipelineWhenTheCallbackThrows(): void
+    {
+        // In pipeline mode discard() only drops the client-side buffer; a WATCH already
+        // sent before pipeline() stays on the server and has to be cleared as well.
+        $store = $this->store;
+
+        try {
+            $store->transaction(function (Redis $redis) use ($store): void {
+                $redis->watch($store->key('w'));
+                $redis->pipeline();
+                $redis->set($store->key('p'), 'x');
+                throw new \RuntimeException('failed mid-pipeline');
+            });
+        } catch (\RuntimeException) {
+        }
+
+        (new RedisCall(host: self::host(), port: self::port(), databaseIndex: self::db()))
+            ->connection()
+            ->set($store->key('w'), 'changed');
+
+        $redis = $store->raw();
+        self::assertSame(Redis::ATOMIC, $redis->getMode());
+        $redis->multi();
+        $redis->set($store->key('next'), 'x');
+        self::assertSame([true], $redis->exec(), 'the next EXEC is not aborted by a WATCH it never set');
+        self::assertNull($store->get('p'), 'the queued pipeline write never reached the server');
+    }
+
     public function testTransactionClearsAWatchWhenTheCallbackThrows(): void
     {
         $store = $this->store;

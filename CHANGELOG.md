@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-11-21
+
+### Added
+
+- **`RedisPool::releaseCurrent()` — a coroutine gives its connection back when it is done
+  with Redis, not only when it ends.** A coroutine kept the connection of its first command
+  until it finished: right for a request, wrong for one that lives on long after its last
+  command. A Server-Sent Events stream held a pooled connection for as long as the tab stayed
+  open, and a few open tabs emptied the pool for every other request of the worker. Now the
+  connections are returned at once and the next command in the coroutine borrows again; the
+  defer that would have returned them does nothing. A connection inside `multi()` or
+  `pipeline()` is kept, with a warning: given back, its queued commands would be discarded
+  under the coroutine still building them. Outside a coroutine it does nothing. The kernel
+  calls it when a stream starts (winter-kernel 4.7.1).
+
+### Changed
+
+- Requires **winter-cpool `^1.3`**: a liveness check that does not answer — a socket dropped
+  in silence — is no longer waited for longer than `validationTimeout`.
+
 ## [1.1.0] — 2026-10-08
 
 ### Fixed

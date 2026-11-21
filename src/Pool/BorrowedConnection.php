@@ -20,6 +20,9 @@ final class BorrowedConnection
     /** Set when the connection was found dead in use — the defer evicts, never releases. */
     public bool $dead = false;
 
+    /** Set when the coroutine gave it back early ({@see \Flytachi\Winter\Redis\RedisPool::releaseCurrent()}) — the defer does nothing. */
+    public bool $released = false;
+
     public function __construct(public readonly PoolEntry $entry)
     {
     }

@@ -222,6 +222,74 @@ final class RedisPool
     }
 
     /**
+     * Gives back, now, every connection this coroutine holds — instead of when the
+     * coroutine ends. The next command in it borrows again.
+     *
+     * A coroutine keeps the connection of its first command until it finishes. For a
+     * request that is right; for one that goes on long after its last command it is a
+     * connection nobody uses: a Server-Sent Events stream holds one for as long as the
+     * tab is open, and a few open tabs empty the pool for every other request of the
+     * worker. Call this when the coroutine is done with Redis for a while.
+     *
+     * A connection inside `multi()` or `pipeline()` is kept, with a warning: given back,
+     * its queued commands would be discarded under the coroutine still building them.
+     * Outside a coroutine it does nothing: there the connection belongs to the process.
+     */
+    public static function releaseCurrent(): void
+    {
+        if (!self::inCoroutine()) {
+            return;
+        }
+        $ctx = \Swoole\Coroutine::getContext();
+        $cid = \Swoole\Coroutine::getCid();
+        $held = [];
+        foreach ($ctx as $key => $value) {
+            if (is_string($key) && str_starts_with($key, 'winter_redis_') && $value instanceof BorrowedConnection) {
+                $held[$key] = $value;
+            }
+        }
+        foreach ($held as $key => $connection) {
+            $configClass = (string) base64_decode(substr($key, strlen('winter_redis_')), true);
+            $mode = self::openMode($connection);
+            if ($mode !== null) {
+                self::logger()->warning(
+                    "cid={$cid} kept: {$configClass} ({$mode} is open — exec() or discard() it first)"
+                );
+                continue;
+            }
+            unset($ctx[$key]);
+            $connection->released = true;
+            $pool = self::$pools[self::key($configClass)] ?? null;
+            if ($pool === null) {
+                continue;
+            }
+            if ($connection->dead) {
+                $pool->evict($connection->entry);
+                continue;
+            }
+            self::logger()->debug("cid={$cid} release (early): {$configClass}");
+            $pool->release($connection->entry);
+        }
+    }
+
+    /** `MULTI` or `PIPELINE` while one is open on the connection; null otherwise. */
+    private static function openMode(BorrowedConnection $connection): ?string
+    {
+        try {
+            /** @var RedisConfigInterface $config */
+            $config = $connection->entry->resource;
+            $mode = $config->connection()->getMode();
+        } catch (\Throwable) {
+            return null;
+        }
+        return match ($mode) {
+            \Redis::MULTI => 'MULTI',
+            \Redis::PIPELINE => 'PIPELINE',
+            default => null,
+        };
+    }
+
+    /**
      * Live utilisation of every coroutine pool, keyed by config FQCN.
      *
      * The numbers are **per worker**: each Swoole worker holds its own pool, so a health
@@ -411,6 +479,9 @@ final class RedisPool
             // may already be tearing down, and it carries the verdict reportFailure()
             // may have left on it.
             \Swoole\Coroutine::defer(static function () use ($pool, $held, $cid, $configClass): void {
+                if ($held->released) {
+                    return;   // given back early, by releaseCurrent()
+                }
                 if ($held->dead) {
                     self::logger()->warning("cid={$cid} evict: {$configClass}");
                     $pool->evict($held->entry);

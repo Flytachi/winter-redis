@@ -51,6 +51,12 @@ The defer captures the `BorrowedConnection` **directly** rather than reading it 
 the context, which may already be tearing down. It carries the `dead` flag, so
 `reportFailure()` can turn a release into an eviction after the fact.
 
+`releaseCurrent()` gives the coroutine's connections back before it ends — for a coroutine
+that lives on long after its last command, a Server-Sent Events stream above all. It sets
+the `released` flag, so the defer does nothing, and drops the entry from the context, so the
+next command borrows again. A connection inside `multi()` or `pipeline()` is kept, with a
+warning.
+
 Outside a coroutine there is no lease: a `SingleConnection` per config lives for the
 process. The liveness and lifetime logic is the same, which is what makes a long-running
 CLI worker survive a Redis restart.

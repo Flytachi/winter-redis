@@ -153,4 +153,64 @@ final class RedisPoolCoroutineTest extends RedisTestCase
         self::assertSame(10, $stats[TestRedisConfig::class]['maximum'], 'package default');
         self::assertSame(1, $stats[TinyPoolRedisConfig::class]['maximum'], 'from the config');
     }
+
+    // -- releaseCurrent -------------------------------------------------------
+
+    public function testReleaseCurrentGivesTheConnectionBackNowAndOnce(): void
+    {
+        $seen = [];
+
+        self::runCoroutines(function () use (&$seen): void {
+            Coroutine::create(function () use (&$seen): void {
+                RedisPool::store(TestRedisConfig::class)->ping();
+                RedisPool::releaseCurrent();
+                $seen['after'] = RedisPool::stats()[TestRedisConfig::class]['active'];
+                RedisPool::store(TestRedisConfig::class)->ping();
+                $seen['again'] = RedisPool::stats()[TestRedisConfig::class]['active'];
+            });
+            Coroutine::sleep(0.05);
+            $seen['ended'] = RedisPool::stats()[TestRedisConfig::class];
+        });
+
+        self::assertSame(0, $seen['after'], 'given back at once');
+        self::assertSame(1, $seen['again'], 'the next command borrows again');
+        self::assertSame(0, $seen['ended']['active']);
+        self::assertSame(1, $seen['ended']['idle'], 'released once at the end, not twice');
+    }
+
+    public function testAConnectionInsideMultiOrAPipelineIsKeptWithAWarning(): void
+    {
+        $log = new RecordingLogger();
+        RedisPool::setLogger($log);
+        $held = [];
+
+        self::runCoroutines(function () use (&$held): void {
+            foreach (['multi', 'pipeline'] as $mode) {
+                Coroutine::create(function () use (&$held, $mode): void {
+                    $redis = RedisPool::store(TestRedisConfig::class);
+                    $redis->{$mode}();
+                    RedisPool::releaseCurrent();
+                    $held[$mode] = RedisPool::store(TestRedisConfig::class) === $redis;
+                    $redis->discard();
+                });
+            }
+            Coroutine::sleep(0.05);
+        });
+
+        ksort($held);   // multi() goes to the server and finishes later
+        self::assertSame(['multi' => true, 'pipeline' => true], $held, 'its queued commands would go to the next borrower');
+        $warnings = implode("\n", $log->messagesAt('warning'));
+        self::assertCount(2, $log->messagesAt('warning'));
+        self::assertStringContainsString('(MULTI is open', $warnings);
+        self::assertStringContainsString('(PIPELINE is open', $warnings);
+    }
+
+    public function testReleaseCurrentIsANoOpOutsideACoroutineOrWithoutAConnection(): void
+    {
+        RedisPool::releaseCurrent();
+        self::runCoroutines(static function (): void {
+            RedisPool::releaseCurrent();
+        });
+        self::assertTrue(true, 'nothing to give back, nothing thrown');
+    }
 }
